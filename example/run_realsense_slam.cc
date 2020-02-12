@@ -20,7 +20,6 @@
 #include <popl.hpp>
 
 #include <librealsense2/rs.hpp>
-#include <experimental/filesystem>
 
 #ifdef USE_STACK_TRACE_LOGGER
 #include <glog/logging.h>
@@ -33,43 +32,29 @@
 void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
                    const std::string& vocab_file_path,
                    const float scale, const std::string& map_db_path) {
-    if (std::experimental::filesystem::v1::is_regular_file("../Students/20190906_130112.bag")) {
-        printf("File found!\n");
-    }
-
     cv::setUseOptimized( true );
-    
+
     rs2::config config;
-    rs2::context context;
+
     rs2::pipeline pipeline;
-    const rs2::playback playback = context.load_device("../Students/20190906_130112.bag");
-    const std::vector<rs2::sensor> sensors = playback.query_sensors();
-    for( const rs2::sensor& sensor : sensors ){
-        const std::vector<rs2::stream_profile> stream_profiles = sensor.get_stream_profiles();
-        for( const rs2::stream_profile& stream_profile : stream_profiles ){
-            config.enable_stream( stream_profile.stream_type(), stream_profile.stream_index() );
-            printf("%s - %dfps\n", stream_profile.stream_name().c_str(), stream_profile.fps());
-        }
-    }
-    
-    config.enable_device_from_file( playback.file_name() );
-    
+    config.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_RGB8, 30);
+    config.enable_stream(RS2_STREAM_DEPTH, 1280, 720, RS2_FORMAT_Z16, 30);
+
+    rs2::align align_to_color(RS2_STREAM_COLOR);
+
     rs2::pipeline_profile pipeline_profile = pipeline.start( config );
-    
-    pipeline_profile.get_device().as<rs2::playback>().set_real_time( false );
-    
+
     // build a SLAM system
     openvslam::system SLAM(cfg, vocab_file_path);
     // startup the SLAM process
     SLAM.startup();
-    
+
     if (!map_db_path.empty()) {
         // load the map database
         try {
             SLAM.load_map_database(map_db_path);
         } catch (...) {
         }
-        
     }
 
     // create a viewer object
@@ -79,20 +64,20 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
 #elif USE_SOCKET_PUBLISHER
     socket_publisher::publisher publisher(cfg, &SLAM, SLAM.get_frame_publisher(), SLAM.get_map_publisher());
 #endif
-    
+
     rs2::frameset frameset;
-    
+
     cv::Mat color_frame;
     cv::Mat depth_frame;
     cv::Mat mask = {};
-    
+
     double timestamp = 0.0;
     std::vector<double> track_times;
 
     unsigned int num_frame = 0;
 
     unsigned int frame_id = 0;
-    
+
     bool is_not_end = true;
     // run the SLAM in another thread
     std::thread thread([&]() {
@@ -101,31 +86,23 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
             if (SLAM.terminate_is_requested()) {
                 break;
             }
-            
-            frameset = pipeline.wait_for_frames();
-            
+
+            frameset = align_to_color.process(pipeline.wait_for_frames());
+
             if (frame_id == frameset.get_color_frame().get_frame_number()) {
                 continue;
             };
             frame_id = frameset.get_color_frame().get_frame_number();
-            //const rs2_format color_format = frameset.get_color_frame().get_profile().format();
-            
-            color_frame = cv::Mat(720, 1280, CV_8UC3,
-                                  const_cast<void*>(frameset.get_color_frame().get_data()));
-            depth_frame = cv::Mat(720, 1280, CV_16UC1,
-                                  const_cast<void*>(frameset.get_depth_frame().get_data()));
-            
+
+            color_frame = cv::Mat(720, 1280, CV_8UC3, const_cast<void*>(frameset.get_color_frame().get_data()));
+            depth_frame = cv::Mat(720, 1280, CV_16UC1, const_cast<void*>(frameset.get_depth_frame().get_data()));
+
             if (frameset.get_color_frame().get_timestamp() > frameset.get_depth_frame().get_timestamp()) {
                 timestamp = frameset.get_color_frame().get_timestamp() * 0.001;
             } else {
                 timestamp = frameset.get_depth_frame().get_timestamp() * 0.001;
             }
 
-            //cv::cvtColor( color_frame, color_frame, cv::COLOR_RGB2BGR );
-                                  
-            //if (frame.empty()) {
-            //    continue;
-            //}
             if (scale != 1.0) {
                 cv::resize(color_frame, color_frame, cv::Size(), scale, scale, cv::INTER_LINEAR);
                 cv::resize(depth_frame, depth_frame, cv::Size(), scale, scale, cv::INTER_LINEAR);
@@ -150,7 +127,7 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
         }
     });
-    
+
     // run the viewer in the current thread
     #ifdef USE_PANGOLIN_VIEWER
     viewer.run();
@@ -172,7 +149,7 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
     const auto total_track_time = std::accumulate(track_times.begin(), track_times.end(), 0.0);
     std::cout << "median tracking time: " << track_times.at(track_times.size() / 2) << "[s]" << std::endl;
     std::cout << "mean tracking time: " << total_track_time / track_times.size() << "[s]" << std::endl;
-    
+
 }
 
 int main(int argc, char* argv[]) {
@@ -233,7 +210,7 @@ int main(int argc, char* argv[]) {
 #ifdef USE_GOOGLE_PERFTOOLS
     ProfilerStart("slam.prof");
 #endif
-    
+
     //cfg->camera_->model_->fx_ *= scale->value();
     //cfg->camera_->model_->fy_ *= scale->value();
     //cfg->camera_->model_->cx_ *= scale->value();
