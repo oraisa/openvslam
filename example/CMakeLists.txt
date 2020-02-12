@@ -62,6 +62,13 @@ list(APPEND EXECUTABLE_TARGETS run_kitti_slam)
 add_executable(run_tum_rgbd_slam run_tum_rgbd_slam.cc util/tum_rgbd_util.cc)
 list(APPEND EXECUTABLE_TARGETS run_tum_rgbd_slam)
 
+add_executable(run_realsense_slam run_realsense_slam.cc)
+list(APPEND EXECUTABLE_TARGETS run_realsense_slam)
+
+find_package( realsense2 REQUIRED )
+target_link_libraries( run_realsense_slam PRIVATE ${realsense2_LIBRARY} )
+target_link_libraries( run_realsense_slam PRIVATE stdc++fs )
+
 foreach(EXECUTABLE_TARGET IN LISTS EXECUTABLE_TARGETS)
     # Set output directory for executables
     set_target_properties(${EXECUTABLE_TARGET} PROPERTIES

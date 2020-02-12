@@ -221,13 +221,13 @@ void tracking_module::track() {
         map_db_->update_frame_statistics(curr_frm_, tracking_state_ == tracker_state_t::Lost);
 
         // if tracking is failed within 5.0 sec after initialization, reset the system
-        constexpr float init_retry_thr = 5.0;
-        if (tracking_state_ == tracker_state_t::Lost
-            && curr_frm_.id_ - initializer_.get_initial_frame_id() < camera_->fps_ * init_retry_thr) {
-            spdlog::info("tracking lost within {} sec after initialization", init_retry_thr);
-            system_->request_reset();
-            return;
-        }
+        //constexpr float init_retry_thr = 5.0;
+        //if (tracking_state_ == tracker_state_t::Lost
+        //    && curr_frm_.id_ - initializer_.get_initial_frame_id() < camera_->fps_ * init_retry_thr) {
+        //    spdlog::info("tracking lost within {} sec after initialization", init_retry_thr);
+        //    system_->request_reset();
+        //    return;
+        //}
 
         // show message if tracking has been lost
         if (last_tracking_state_ != tracker_state_t::Lost && tracking_state_ == tracker_state_t::Lost) {
