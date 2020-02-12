@@ -8,10 +8,10 @@ Camera.name: "Realsense 720p"
 Camera.setup: "RGBD"
 Camera.model: "perspective"
 
-Camera.fx: 926.362
-Camera.fy: 926.41
-Camera.cx: 648.556
-Camera.cy: 366.051
+Camera.fx: 929.7775
+Camera.fy: 929.887
+Camera.cx: 643.694
+Camera.cy: 355.314
 
 Camera.k1: 0.0
 Camera.k2: 0.0
