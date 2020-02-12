@@ -67,7 +67,6 @@ list(APPEND EXECUTABLE_TARGETS run_realsense_slam)
 
 find_package( realsense2 REQUIRED )
 target_link_libraries( run_realsense_slam PRIVATE ${realsense2_LIBRARY} )
-target_link_libraries( run_realsense_slam PRIVATE stdc++fs )
 
 foreach(EXECUTABLE_TARGET IN LISTS EXECUTABLE_TARGETS)
     # Set output directory for executables
