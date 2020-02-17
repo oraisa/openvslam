@@ -47,7 +47,7 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
     // build a SLAM system
     openvslam::system SLAM(cfg, vocab_file_path);
     // startup the SLAM process
-    SLAM.startup();
+    SLAM.startup(false);
 
     if (!map_db_path.empty()) {
         // load the map database
