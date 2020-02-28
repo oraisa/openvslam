@@ -52,7 +52,7 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
     if (!map_db_path.empty()) {
         // load the map database
         try {
-            SLAM.load_map_database(map_db_path);
+            SLAM.load_map_database(map_db_path, true);
         } catch (...) {
         }
     }
@@ -78,10 +78,9 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
 
     unsigned int frame_id = 0;
 
-    bool is_not_end = true;
     // run the SLAM in another thread
     std::thread thread([&]() {
-        while (is_not_end) {
+        while (true) {
             // check if the termination of SLAM system is requested or not
             if (SLAM.terminate_is_requested()) {
                 break;
@@ -142,7 +141,7 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
 
     if (!map_db_path.empty()) {
         // output the map database
-        SLAM.save_map_database(map_db_path);
+        SLAM.save_map_database(map_db_path, true);
     }
 
     std::sort(track_times.begin(), track_times.end());

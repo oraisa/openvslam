@@ -60,10 +60,10 @@ public:
     void save_keyframe_trajectory(const std::string& path, const std::string& format) const;
 
     //! Load the map database from the MessagePack file
-    void load_map_database(const std::string& path) const;
+    void load_map_database(const std::string& path, bool use_binary_format=false) const;
 
     //! Save the map database to the MessagePack file
-    void save_map_database(const std::string& path) const;
+    void save_map_database(const std::string& path, bool use_binary_format=false) const;
 
     //! Get the map publisher
     const std::shared_ptr<publish::map_publisher> get_map_publisher() const;

@@ -360,5 +360,168 @@ void map_database::to_json(nlohmann::json& json_keyfrms, nlohmann::json& json_la
     json_landmarks = landmarks;
 }
 
+void map_database::from_buffer(camera_database *cam_db, bow_vocabulary *bow_vocab,
+                               bow_database *bow_db,
+                               const std::vector<keyframe::keyframe_data> &keyframe_data,
+                               const std::vector<landmark::landmark_data> &landmark_data) {
+    std::lock_guard<std::mutex> lock(mtx_map_access_);
+
+    // Step 1. delete all the data in map database
+    for (auto& lm : landmarks_) {
+        delete lm.second;
+        lm.second = nullptr;
+    }
+
+    for (auto& keyfrm : keyframes_) {
+        delete keyfrm.second;
+        keyfrm.second = nullptr;
+    }
+
+    landmarks_.clear();
+    keyframes_.clear();
+    max_keyfrm_id_ = 0;
+    local_landmarks_.clear();
+    origin_keyfrm_ = nullptr;
+
+    spdlog::info("decoding {} keyframes to load", keyframe_data.size());
+
+    for (const auto& keyframe: keyframe_data) {
+
+        Eigen::Quaterniond quat(keyframe.rot_w, keyframe.rot_x, keyframe.rot_y, keyframe.rot_z);
+        Mat33_t rot_cw = quat.toRotationMatrix();
+        Vec3_t trans_cw(keyframe.trans_x, keyframe.trans_y, keyframe.trans_z);
+
+        Mat44_t cam_pose_cw = util::converter::to_eigen_cam_pose(rot_cw, trans_cw);
+
+        camera::base* camera = cam_db->get_camera(keyframe.camera_name);
+
+        auto bearings = eigen_alloc_vector<Vec3_t>(keyframe.n_keypoints);
+
+        auto undist_keypoints = std::vector<cv::KeyPoint>();
+        undist_keypoints.reserve(keyframe.n_keypoints);
+        auto keypoints = std::vector<cv::KeyPoint>();
+        keypoints.reserve(keyframe.n_keypoints);
+        for (auto& kp : keyframe.undistorted_keypoints) {
+            undist_keypoints.emplace_back(cv::KeyPoint(kp.x, kp.y, 1.0));
+        }
+        for (auto& kp : keyframe.keypoints) {
+            keypoints.emplace_back(cv::KeyPoint(kp.x, kp.y, 0, kp.angle, 0, kp.octave, -1));
+        }
+
+        cv::Mat descriptors(keyframe.descriptors.size(), 32, CV_8U);
+        for (unsigned int idx = 0; idx < keyframe.descriptors.size(); ++idx) {
+            const auto& descriptor = keyframe.descriptors.at(idx);
+            auto p = descriptors.row(idx).ptr<uint32_t>();
+            for (unsigned int i = 0; i < 8; ++i, ++p) {
+                *p = descriptor.at(i);
+            }
+        }
+
+        camera->convert_keypoints_to_bearings(undist_keypoints, bearings);
+
+        auto keyfrm = new data::keyframe(keyframe.id, keyframe.source_frame_id, keyframe.timestamp, cam_pose_cw, camera,
+                                         keyframe.depth_thr, keyframe.n_keypoints, keypoints, undist_keypoints, bearings,
+                                         keyframe.x_rights, keyframe.depths, descriptors, keyframe.num_scale_levels,
+                                         keyframe.scale_factor, bow_vocab, bow_db, this);
+
+        assert(!keyframes_.count(id));
+        keyframes_[keyfrm->id_] = keyfrm;
+        if (keyfrm->id_ > max_keyfrm_id_) {
+            max_keyfrm_id_ = keyfrm->id_;
+        }
+        if (keyfrm->id_ == 0) {
+            origin_keyfrm_ = keyfrm;
+        }
+    }
+
+    spdlog::info("decoding {} landmarks to load", landmark_data.size());
+    for (const auto& landmark : landmark_data) {
+        Vec3_t pos_w(landmark.pos_x, landmark.pos_y, landmark.pos_z);
+        auto lm = new data::landmark(landmark.id, landmark.first_keyframe_id, pos_w,
+                                     keyframes_.at(landmark.ref_keyframe_id),
+                                     landmark.num_observable, landmark.num_observed, this);
+        landmarks_[lm->id_] = lm;
+    }
+
+    spdlog::info("registering essential graph");
+    for (const auto& keyframe: keyframe_data) {
+        auto id = keyframe.id;
+        auto spanning_parent_id = keyframe.span_parent;
+        auto spanning_children_ids = keyframe.spanning_child_ids;
+        auto loop_edge_ids = keyframe.loop_edge_ids;
+
+        keyframes_.at(id)->graph_node_->set_spanning_parent((spanning_parent_id == -1) ? nullptr : keyframes_.at(spanning_parent_id));
+        for (const auto spanning_child_id : spanning_children_ids) {
+            assert(keyframes_.count(spanning_child_id));
+            keyframes_.at(id)->graph_node_->add_spanning_child(keyframes_.at(spanning_child_id));
+        }
+        for (const auto loop_edge_id : loop_edge_ids) {
+            assert(keyframes_.count(loop_edge_id));
+            keyframes_.at(id)->graph_node_->add_loop_edge(keyframes_.at(loop_edge_id));
+        }
+    }
+
+    spdlog::info("registering keyframe-landmark association");
+    for (const auto& keyframe : keyframe_data) {
+        const auto num_keypts = keyframe.n_keypoints;
+        const auto landmark_ids = keyframe.landmark_ids;
+        assert(landmark_ids.size() == num_keypts);
+
+        assert(keyframes_.count(keyfrm_id));
+        auto keyfrm = keyframes_.at(keyframe.id);
+        for (unsigned int idx = 0; idx < num_keypts; ++idx) {
+            const auto lm_id = landmark_ids.at(idx);
+            if (lm_id < 0) {
+                continue;
+            }
+            if (!landmarks_.count(lm_id)) {
+                spdlog::warn("landmark {}: not found in the database", lm_id);
+                continue;
+            }
+
+            auto lm = landmarks_.at(lm_id);
+            keyfrm->add_landmark(lm, idx);
+            lm->add_observation(keyfrm, idx);
+        }
+    }
+
+    spdlog::info("updating covisibility graph");
+    for (const auto& keyframe : keyframe_data) {
+        const auto id = keyframe.id;
+        assert(0 <= id);
+
+        assert(keyframes_.count(id));
+        auto keyfrm = keyframes_.at(id);
+
+        keyfrm->graph_node_->update_connections();
+        keyfrm->graph_node_->update_covisibility_orders();
+    }
+
+    spdlog::info("updating landmark geometry");
+    for (const auto& landmark : landmark_data) {
+        const auto id = landmark.id;
+        assert(0 <= id);
+
+        assert(landmarks_.count(id));
+        auto lm = landmarks_.at(id);
+
+        lm->update_normal_and_depth();
+        lm->compute_descriptor();
+    }
+
+}
+
+void map_database::to_buffer(std::vector<keyframe::keyframe_data> &keyframe_data, std::vector<landmark::landmark_data> &landmark_data) {
+    std::lock_guard<std::mutex> lock(mtx_map_access_);
+    for (const auto id_keyfrm : keyframes_) {
+        id_keyfrm.second->graph_node_->update_connections();
+        keyframe_data.push_back(id_keyfrm.second->to_buffer());
+    }
+    for (const auto id_lm : landmarks_) {
+        id_lm.second->update_normal_and_depth();
+        landmark_data.push_back(id_lm.second->to_buffer());
+    }
+}
+
 } // namespace data
 } // namespace openvslam

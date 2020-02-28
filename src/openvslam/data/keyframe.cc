@@ -11,6 +11,7 @@
 #include "openvslam/util/converter.h"
 
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 
 namespace openvslam {
 namespace data {
@@ -133,6 +134,64 @@ nlohmann::json keyframe::to_json() const {
             {"span_parent", spanning_parent ? spanning_parent->id_ : -1},
             {"span_children", spanning_child_ids},
             {"loop_edges", loop_edge_ids}};
+}
+
+keyframe::keyframe_data keyframe::to_buffer() const {
+    const Quat_t quat_cw(cam_pose_cw_.block<3, 3>(0, 0));
+    Vec3_t trans_vec = cam_pose_cw_.block<3, 1>(0, 3);
+
+    std::vector<keyframe::keypoint_data> keypoints;
+    keypoints.reserve(keypts_.size());
+    for (const auto & keypt : keypts_) {
+        keypoints.push_back({keypt.pt.x, keypt.pt.y, keypt.angle, keypt.octave});
+    }
+
+    std::vector<keyframe::undistorted_keypoint_data> undistorted_keypoints;
+    undistorted_keypoints.reserve(num_keypts_);
+    for (const auto & keypt : undist_keypts_) {
+        undistorted_keypoints.push_back({keypt.pt.x, keypt.pt.y});
+    }
+
+    std::vector<std::array<uint32_t, 8>> descriptors;
+    descriptors.reserve(descriptors_.rows);
+
+    for (int idx = 0; idx < descriptors_.rows; ++idx) {
+        const cv::Mat& desc = descriptors_.row(idx);
+        const auto* p = desc.ptr<uint32_t>();
+
+        descriptors.push_back(std::array<uint32_t, 8>({p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]}));
+    }
+
+    // extract landmark IDs
+    std::vector<int> landmark_ids(landmarks_.size(), -1);
+    for (unsigned int i = 0; i < landmark_ids.size(); ++i) {
+        if (landmarks_.at(i) && !landmarks_.at(i)->will_be_erased()) {
+            landmark_ids.at(i) = landmarks_.at(i)->id_;
+        }
+    }
+
+    // extract spanning tree parent
+    auto spanning_parent = graph_node_->get_spanning_parent();
+
+    // extract spanning tree children
+    const auto spanning_children = graph_node_->get_spanning_children();
+    std::vector<int> spanning_child_ids;
+    spanning_child_ids.reserve(spanning_children.size());
+    for (const auto spanning_child : spanning_children) {
+        spanning_child_ids.push_back(spanning_child->id_);
+    }
+
+    // extract loop edges
+    const auto loop_edges = graph_node_->get_loop_edges();
+    std::vector<int> loop_edge_ids;
+    for (const auto loop_edge : loop_edges) {
+        loop_edge_ids.push_back(loop_edge->id_);
+    }
+
+    return {id_, src_frm_id_, timestamp_, camera_->name_, depth_thr_, quat_cw.x(), quat_cw.y(), quat_cw.z(), quat_cw.w(),
+            trans_vec(0), trans_vec(1), trans_vec(2), num_keypts_, keypoints, undistorted_keypoints, stereo_x_right_,
+            depths_, descriptors, landmark_ids, num_scale_levels_, scale_factor_, spanning_parent ? spanning_parent->id_ : -1,
+            spanning_child_ids, loop_edge_ids};
 }
 
 void keyframe::set_cam_pose(const Mat44_t& cam_pose_cw) {

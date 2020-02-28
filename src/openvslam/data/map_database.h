@@ -3,6 +3,8 @@
 
 #include "openvslam/data/bow_vocabulary.h"
 #include "openvslam/data/frame_statistics.h"
+#include "openvslam/data/keyframe.h"
+#include "openvslam/data/landmark.h"
 
 #include <mutex>
 #include <vector>
@@ -160,6 +162,14 @@ public:
     //! mutex for locking ALL access to the database
     //! (NOTE: cannot used in map_database class)
     static std::mutex mtx_database_;
+
+    void from_buffer(camera_database* cam_db, bow_vocabulary* bow_vocab, bow_database* bow_db,
+                     const std::vector<keyframe::keyframe_data>& keyframe_data,
+                     const std::vector<landmark::landmark_data>& landmark_data);
+
+    void to_buffer(std::vector<keyframe::keyframe_data>& keyframe_data, std::vector<landmark::landmark_data>& landmark_data);
+
+
 
 private:
     /**

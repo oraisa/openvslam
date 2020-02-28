@@ -26,6 +26,54 @@ public:
 
     nlohmann::json to_json() const;
 
+    struct perspective_data {
+        double fx;
+        double fy;
+        double cx;
+        double cy;
+        double k1;
+        double k2;
+        double p1;
+        double p2;
+        double k3;
+        double focal_x_baseline;
+    };
+
+    struct fisheye_data {
+        double fx;
+        double fy;
+        double cx;
+        double cy;
+        double k1;
+        double k2;
+        double k3;
+        double k4;
+        double focal_x_baseline;
+    };
+
+    struct equirectangular_data {
+
+    };
+
+    struct camera_data {
+        std::string camera_name;
+        camera::model_type_t model_type;
+        camera::setup_type_t setup_type;
+        camera::color_order_t color_order;
+        unsigned int cols;
+        unsigned int rows;
+        double fps;
+        union {
+            perspective_data perspective;
+            fisheye_data fisheye;
+            equirectangular_data equirectangular;
+        };
+    };
+
+    void from_buffer(std::vector<camera_data> cameras);
+
+    std::vector<camera_data> to_buffer();
+
 private:
     //-----------------------------------------
     //! mutex to access the database

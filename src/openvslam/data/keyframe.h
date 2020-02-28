@@ -67,6 +67,47 @@ public:
      */
     nlohmann::json to_json() const;
 
+    struct keypoint_data {
+        float x;
+        float y;
+        float angle;
+        int octave;
+    };
+
+    struct undistorted_keypoint_data {
+        float x;
+        float y;
+    };
+
+    struct keyframe_data {
+        unsigned int id;
+        unsigned int source_frame_id;
+        double timestamp;
+        std::string camera_name;
+        float depth_thr;
+        double rot_x;
+        double rot_y;
+        double rot_z;
+        double rot_w;
+        double trans_x;
+        double trans_y;
+        double trans_z;
+        unsigned int n_keypoints;
+        std::vector<keypoint_data> keypoints;
+        std::vector<undistorted_keypoint_data> undistorted_keypoints;
+        std::vector<float> x_rights;
+        std::vector<float> depths;
+        std::vector<std::array<uint32_t, 8>> descriptors;
+        std::vector<int> landmark_ids;
+        unsigned int num_scale_levels;
+        float scale_factor;
+        unsigned int span_parent;
+        std::vector<int> spanning_child_ids;
+        std::vector<int> loop_edge_ids;
+    };
+
+    keyframe_data to_buffer() const;
+
     //-----------------------------------------
     // camera pose
 

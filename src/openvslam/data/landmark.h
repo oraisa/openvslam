@@ -102,6 +102,19 @@ public:
     //! encode landmark information as JSON
     nlohmann::json to_json() const;
 
+    struct landmark_data {
+        unsigned int id;
+        unsigned int first_keyframe_id;
+        unsigned int ref_keyframe_id;
+        unsigned int num_observable;
+        unsigned int num_observed;
+        double pos_x;
+        double pos_y;
+        double pos_z;
+    };
+
+    landmark_data to_buffer() const;
+
 public:
     unsigned int id_;
     static std::atomic<unsigned int> next_id_;

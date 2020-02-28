@@ -38,6 +38,10 @@ public:
      */
     void load_message_pack(const std::string& path);
 
+    void save_binary_file(const std::string& path);
+
+    void load_binary_file(const std::string& path);
+
 private:
     //! camera database
     data::camera_database* const cam_db_ = nullptr;
