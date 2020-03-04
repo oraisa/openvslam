@@ -1,0 +1,51 @@
+# Realsense T265 stereo
+
+#==============#
+# Camera Model #
+#==============#
+
+Camera.name: "Realsense T265 stereo"
+Camera.setup: "stereo"
+Camera.model: "fisheye"
+
+Camera.fx: 285.947 
+Camera.fy: 285.914
+Camera.cx: 428.915
+Camera.cy: 403.695
+
+Camera.k1: -0.0125516
+Camera.k2: 0.0515311
+Camera.k3: -0.0482535
+Camera.k4: 0.00975901
+
+Camera.fps: 30.0
+Camera.cols: 848
+Camera.rows: 800
+Camera.focal_x_baseline: 18.2798482478 #285.947 * 0.0639274
+
+Camera.color_order: "Gray"
+
+#================#
+# ORB Parameters #
+#================#
+
+Feature.max_num_keypoints: 1000
+Feature.scale_factor: 1.2
+Feature.num_levels: 8
+Feature.ini_fast_threshold: 20
+Feature.min_fast_threshold: 7
+
+#===========================#
+# PangolinViewer Parameters #
+#===========================#
+
+PangolinViewer.keyframe_size: 0.05
+PangolinViewer.keyframe_line_width: 1
+PangolinViewer.graph_line_width: 1
+PangolinViewer.point_size: 2
+PangolinViewer.camera_size: 0.08
+PangolinViewer.camera_line_width: 3
+PangolinViewer.viewpoint_x: 0
+PangolinViewer.viewpoint_y: -0.9
+PangolinViewer.viewpoint_z: -1.9
+PangolinViewer.viewpoint_f: 400
