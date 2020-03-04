@@ -182,20 +182,6 @@ void stereo_tracking(const std::shared_ptr<openvslam::config>& cfg,
     cv::Mat fisheye_frame_right;
     cv::Mat mask = {};
     
-    float camera_params[9] = {285.947, 0.0, 428.915,
-                              0.0, 285.914, 403.695,
-                              0.0, 0.0, 1.0};
-    cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_params);
-    cv::Mat dummy_image = cv::Mat(848, 800, CV_8U);
-    
-    float distortion_params[4] = {-0.0125516, 0.0515311, -0.0482535, 0.00975901};
-    cv::Mat distortion_matrix = cv::Mat(4, 1, CV_64F, camera_params);
-    
-    cv::Mat dummy_out;
-    cv::fisheye::undistortImage()
-    
-    
-    
     double timestamp = 0.0;
     std::vector<double> track_times;
 
