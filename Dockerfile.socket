@@ -35,6 +35,15 @@ RUN set -x && \
     libavutil-dev \
     libswscale-dev \
     libavresample-dev && \
+: "librealsense dependencies" && \
+  apt-get install -y -qq \ 
+      libssl-dev \
+      libusb-1.0-0-dev \
+      pkg-config \
+      libgtk-3-dev \
+      libglfw3-dev \
+      libgl1-mesa-dev \
+      libglu1-mesa-dev && \
   : "other dependencies" && \
   apt-get install -y -qq \
     libyaml-cpp-dev && \
@@ -50,6 +59,22 @@ ENV C_INCLUDE_PATH=${CMAKE_INSTALL_PREFIX}/include:${C_INCLUDE_PATH}
 ENV CPLUS_INCLUDE_PATH=${CMAKE_INSTALL_PREFIX}/include:${CPLUS_INCLUDE_PATH}
 ENV LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/lib:${LIBRARY_PATH}
 ENV LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
+
+# librealsense
+WORKDIR /tmp
+RUN git clone https://github.com/IntelRealSense/librealsense.git
+RUN cd librealsense && mkdir -p build
+WORKDIR /tmp/librealsense/build
+RUN cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_EXAMPLES=FALSE \
+  -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
+  .. 
+RUN make -j${NUM_THREADS}
+RUN make install
+RUN cd /tmp && rm -rf *
+# Not sure if this is needed
+# ENV librealsense_DIR=${CMAKE_INSTALL_PREFIX}/lib/cmake/librealsense
 
 # Eigen
 ARG EIGEN3_VERSION=3.3.7
