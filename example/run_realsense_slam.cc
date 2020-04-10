@@ -8,6 +8,7 @@
 #include "openvslam/config.h"
 #include "openvslam/util/stereo_rectifier.h"
 #include "openvslam/camera/fisheye.h"
+#include "openvslam/camera/perspective.h"
 
 #include <iostream>
 #include <chrono>
@@ -220,8 +221,12 @@ void rgbd_tracking(const std::shared_ptr<openvslam::config>& cfg,
             };
             frame_id = frameset.get_color_frame().get_frame_number();
 
-            color_frame = cv::Mat(720, 1280, CV_8UC3, const_cast<void*>(frameset.get_color_frame().get_data()));
-            depth_frame = cv::Mat(720, 1280, CV_16UC1, const_cast<void*>(frameset.get_depth_frame().get_data()));
+            color_frame = cv::Mat(frameset.get_color_frame().get_profile().as<rs2::video_stream_profile>().height(),
+                                  frameset.get_color_frame().get_profile().as<rs2::video_stream_profile>().width(),
+                                  CV_8UC3, const_cast<void*>(frameset.get_color_frame().get_data()));
+            depth_frame = cv::Mat(frameset.get_depth_frame().get_profile().as<rs2::video_stream_profile>().height(),
+                                  frameset.get_depth_frame().get_profile().as<rs2::video_stream_profile>().width(),
+                                  CV_16UC1, const_cast<void*>(frameset.get_depth_frame().get_data()));
 
             if (frameset.get_color_frame().get_timestamp() > frameset.get_depth_frame().get_timestamp()) {
                 timestamp = frameset.get_color_frame().get_timestamp() * 0.001;
@@ -395,6 +400,95 @@ int main(int argc, char* argv[]) {
                 }
             }
             cfg = std::make_shared<openvslam::config>(camera, orb_params);
+        } else if (name == "Intel RealSense D435") {
+            std::cout << "Configuration: RGB-D" << std::endl;
+            std::vector<rs2::sensor> sensors = device.query_sensors();
+            if (sensors.size() != 2) {
+                std::cerr << "Unexpected device sensor setup" << std::endl;
+            }
+            std::vector<rs2::stream_profile> stream_profiles = sensors[0].get_stream_profiles();
+            std::vector<rs2::stream_profile> temp = sensors[1].get_stream_profiles();
+            stream_profiles.insert(stream_profiles.end(), temp.begin(), temp.end());
+            
+            rs2::stream_profile color;
+            rs2::stream_profile depth;
+            float depth_scale = 1.0;
+            float depth_baseline = 0.0;
+            
+            if (rosbag_path->is_set()) {
+                for (auto sensor : sensors) {
+                    for (auto sp : sensor.get_stream_profiles()) {
+                        if (sp.stream_type() == RS2_STREAM_COLOR) {
+                            color = sp.as<rs2::video_stream_profile>();
+                        } else if (sp.stream_type() == RS2_STREAM_DEPTH) {
+                            depth = sp.as<rs2::video_stream_profile>();
+                            auto dss = sensor.as<rs2::depth_stereo_sensor>();
+                            depth_scale = dss.get_depth_scale();
+                            depth_baseline = dss.get_stereo_baseline();
+                        }
+                    }
+                }
+            } else {
+                for (auto sensor : sensors) {
+                    for (auto sp : sensor.get_stream_profiles()) {
+                        if (sp.stream_type() == RS2_STREAM_COLOR) {
+                            if (sp.format() == RS2_FORMAT_RGB8 && sp.fps() == 30) {
+                                auto vsp = sp.as<rs2::video_stream_profile>();
+                                if (vsp.width() == 1280 && vsp.height() == 720) {
+                                    color = vsp;
+                                }
+                            }
+                        } else if (sp.stream_type() == RS2_STREAM_DEPTH) {
+                            if (sp.format() == RS2_FORMAT_Z16 && sp.fps() == 30) {
+                                auto vsp = sp.as<rs2::video_stream_profile>();
+                                if (vsp.width() == 1280 && vsp.height() == 720) {
+                                    depth = vsp;
+                                    auto dss = sensor.as<rs2::depth_stereo_sensor>();
+                                    depth_scale = dss.get_depth_scale();
+                                    depth_baseline = dss.get_stereo_baseline();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (!(color.stream_type() == RS2_STREAM_COLOR && depth.stream_type() == RS2_STREAM_DEPTH)) {
+                std::cerr << "Couldn't find correct color & depth streams" << std::endl;
+                return EXIT_FAILURE;
+            }
+            
+            openvslam::camera::color_order_t color_order;
+            switch(color.format()) {
+                case RS2_FORMAT_RGB8:
+                    color_order = openvslam::camera::color_order_t::RGB;
+                    break;
+                case RS2_FORMAT_BGR8:
+                    color_order = openvslam::camera::color_order_t::BGR;
+                    break;
+                default:
+                    std::cerr << "Unsupported color format (not RGB8 or BGR8)" << std::endl;
+                    return EXIT_FAILURE;
+            }
+            if (depth.format() != RS2_FORMAT_Z16) {
+                std::cerr << "Unsupported depth format (should be Z16)" << std::endl;
+                return EXIT_FAILURE;
+            }
+            
+            rs2_intrinsics intrinsics = color.as<rs2::video_stream_profile>().get_intrinsics();
+            
+            camera = new openvslam::camera::perspective(
+                unique_name,
+                openvslam::camera::setup_type_t::RGBD,
+                color_order,
+                color.as<rs2::video_stream_profile>().width(), color.as<rs2::video_stream_profile>().height(),
+                color.fps(),
+                intrinsics.fx, intrinsics.fy, intrinsics.ppx, intrinsics.ppy,
+                intrinsics.coeffs[0], intrinsics.coeffs[1], intrinsics.coeffs[2],
+                intrinsics.coeffs[3], intrinsics.coeffs[4],
+                intrinsics.fx * depth_baseline * 0.001
+            );
+            cfg = std::make_shared<openvslam::config>(camera, orb_params, 1/depth_scale);
             
         } else {
             std::cout << "No configuration available for this device" << std::endl;
