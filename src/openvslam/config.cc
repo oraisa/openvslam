@@ -99,6 +99,18 @@ config::config(const YAML::Node& yaml_node, const std::string& config_file_path)
     }
 }
 
+config::config(camera::base* camera, feature::orb_params orb_params) {
+    camera_ = camera;
+    orb_params_ = orb_params;
+}
+
+config::config(camera::base* camera, feature::orb_params orb_params, float depthmap_factor) {
+    camera_ = camera;
+    orb_params_ = orb_params;
+    true_depth_thr_ = camera->true_baseline_ * 40.0;
+    depthmap_factor_ = depthmap_factor;
+}
+
 config::~config() {
     delete camera_;
     camera_ = nullptr;
