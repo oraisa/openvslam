@@ -15,7 +15,8 @@ RUN set -x && \
     wget \
     curl \
     tar \
-    unzip && \
+    unzip \
+    software-properties-common && \
   : "g2o dependencies" && \
   apt-get install -y -qq \
     libgoogle-glog-dev \
@@ -61,41 +62,13 @@ ENV LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/lib:${LIBRARY_PATH}
 ENV LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
 
 # librealsense
-WORKDIR /tmp
-RUN git clone https://github.com/IntelRealSense/librealsense.git
-RUN cd librealsense && mkdir -p build
-WORKDIR /tmp/librealsense/build
-RUN cmake \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_EXAMPLES=FALSE \
-  -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
-  .. 
-RUN make -j${NUM_THREADS}
-RUN make install
-RUN cd /tmp && rm -rf *
-# Not sure if this is needed
-# ENV librealsense_DIR=${CMAKE_INSTALL_PREFIX}/lib/cmake/librealsense
+RUN apt-key adv --keyserver keys.gnupg.net --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE || \
+    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE && \
+    add-apt-repository "deb http://realsense-hw-public.s3.amazonaws.com/Debian/apt-repo bionic main" -u && \
+    apt-get install -y -qq librealsense2-dev librealsense2-dbg librealsense2-dkms librealsense2-utils
 
 # Eigen
-ARG EIGEN3_VERSION=3.3.7
-WORKDIR /tmp
-RUN set -x && \
-  wget -q http://bitbucket.org/eigen/eigen/get/${EIGEN3_VERSION}.tar.bz2 && \
-  tar xf ${EIGEN3_VERSION}.tar.bz2 && \
-  rm -rf ${EIGEN3_VERSION}.tar.bz2 && \
-  mv eigen-eigen-* eigen-${EIGEN3_VERSION} && \
-  cd eigen-${EIGEN3_VERSION} && \
-  mkdir -p build && \
-  cd build && \
-  cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
-    .. && \
-  make -j${NUM_THREADS} && \
-  make install && \
-  cd /tmp && \
-  rm -rf *
-ENV Eigen3_DIR=${CMAKE_INSTALL_PREFIX}/share/eigen3/cmake
+RUN apt-get install -y -qq libeigen3-dev
 
 # g2o
 ARG G2O_COMMIT=9b41a4ea5ade8e1250b9c1b279f3a9c098811b5a
@@ -203,23 +176,7 @@ RUN set -x && \
 ENV sioclient_DIR=${CMAKE_INSTALL_PREFIX}/lib/cmake/sioclient
 
 # protobuf
-WORKDIR /tmp
-RUN set -x && \
-  apt-get update -y -qq && \
-  apt-get upgrade -y -qq --no-install-recommends && \
-  apt-get install -y -qq autogen autoconf libtool && \
-  wget -q https://github.com/google/protobuf/archive/v3.6.1.tar.gz && \
-  tar xf v3.6.1.tar.gz && \
-  cd protobuf-3.6.1 && \
-  ./autogen.sh && \
-  ./configure --prefix=${CMAKE_INSTALL_PREFIX} --enable-static=no && \
-  make -j${NUM_THREADS} && \
-  make install && \
-  cd /tmp && \
-  rm -rf * && \
-  apt-get purge -y -qq autogen autoconf libtool && \
-  apt-get autoremove -y -qq && \
-  rm -rf /var/lib/apt/lists/*
+RUN apt-get install -y -qq libprotobuf-dev protobuf-compiler
 
 # OpenVSLAM
 COPY . /openvslam/
